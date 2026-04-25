@@ -1,0 +1,810 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>CommunityPulse — Smart Resource Allocation</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=DM+Sans:wght@300;400;500;600&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #0a0e17;
+    --surface: #111827;
+    --surface2: #1a2235;
+    --border: #1f2d44;
+    --accent: #00e5a0;
+    --text: #e8edf5;
+    --muted: #6b7c9a;
+    --critical: #ff4757;
+    --high: #ff8c42;
+    --medium: #ffd166;
+    --low: #00e5a0;
+  }
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body { background:var(--bg); color:var(--text); font-family:'DM Sans',sans-serif; min-height:100vh; overflow-x:hidden; }
+  body::before {
+    content:''; position:fixed; inset:0;
+    background-image: linear-gradient(rgba(0,229,160,0.03) 1px,transparent 1px), linear-gradient(90deg,rgba(0,229,160,0.03) 1px,transparent 1px);
+    background-size:40px 40px; pointer-events:none; z-index:0;
+  }
+
+  /* HEADER */
+  header { position:sticky; top:0; z-index:100; background:rgba(10,14,23,0.92); backdrop-filter:blur(20px); border-bottom:1px solid var(--border); padding:0 2rem; display:flex; align-items:center; justify-content:space-between; height:64px; }
+  .logo { font-family:'DM Serif Display',serif; font-size:1.4rem; color:var(--accent); display:flex; align-items:center; gap:0.5rem; }
+  .logo-dot { width:8px; height:8px; border-radius:50%; background:var(--accent); animation:pulse 2s infinite; }
+  @keyframes pulse { 0%,100%{opacity:1;transform:scale(1)} 50%{opacity:0.5;transform:scale(1.4)} }
+  nav { display:flex; gap:0.25rem; }
+  nav button { background:none; border:none; cursor:pointer; color:var(--muted); font-family:'DM Sans',sans-serif; font-size:0.85rem; font-weight:500; padding:0.5rem 1rem; border-radius:6px; transition:all 0.2s; }
+  nav button:hover { color:var(--text); background:var(--surface); }
+  nav button.active { color:var(--accent); background:rgba(0,229,160,0.08); }
+  .stats-bar { display:flex; gap:1.5rem; align-items:center; }
+  .stat-chip { font-family:'JetBrains Mono',monospace; font-size:0.75rem; color:var(--muted); display:flex; align-items:center; gap:0.4rem; }
+  .stat-chip span { color:var(--accent); font-weight:600; }
+
+  /* LAYOUT */
+  main { position:relative; z-index:1; padding:2rem; max-width:1400px; margin:0 auto; }
+  .page { display:none; }
+  .page.active { display:block; animation:fadeIn 0.3s ease; }
+  @keyframes fadeIn { from{opacity:0;transform:translateY(8px)} to{opacity:1;transform:translateY(0)} }
+  .page-header { margin-bottom:2rem; }
+  .page-header h1 { font-family:'DM Serif Display',serif; font-size:1.8rem; margin-bottom:0.4rem; }
+  .page-header p { color:var(--muted); font-size:0.9rem; }
+
+  /* KPI */
+  .hero-row { display:grid; grid-template-columns:repeat(5,1fr); gap:1rem; margin-bottom:2rem; }
+  .kpi-card { background:var(--surface); border:1px solid var(--border); border-radius:12px; padding:1.25rem; position:relative; overflow:hidden; transition:border-color 0.2s; }
+  .kpi-card:hover { border-color:var(--accent); }
+  .kpi-card::before { content:''; position:absolute; top:0; left:0; right:0; height:2px; background:var(--card-color,var(--accent)); }
+  .kpi-label { font-size:0.72rem; color:var(--muted); text-transform:uppercase; letter-spacing:0.08em; margin-bottom:0.5rem; }
+  .kpi-value { font-family:'DM Serif Display',serif; font-size:2rem; color:var(--card-color,var(--accent)); }
+  .kpi-sub { font-size:0.72rem; color:var(--muted); margin-top:0.25rem; }
+
+  /* PANELS */
+  .dashboard-grid { display:grid; grid-template-columns:1.4fr 1fr; gap:1.5rem; }
+  .panel { background:var(--surface); border:1px solid var(--border); border-radius:12px; padding:1.5rem; }
+  .panel-title { font-family:'DM Serif Display',serif; font-size:1.1rem; margin-bottom:1.25rem; display:flex; align-items:center; justify-content:space-between; }
+  .panel-title .tag { font-family:'JetBrains Mono',monospace; font-size:0.65rem; background:rgba(0,229,160,0.1); color:var(--accent); padding:0.2rem 0.5rem; border-radius:4px; text-transform:uppercase; letter-spacing:0.06em; }
+
+  /* NEED CARDS */
+  .need-card { background:var(--surface2); border:1px solid var(--border); border-radius:10px; padding:1rem 1.25rem; margin-bottom:0.75rem; display:grid; grid-template-columns:auto 1fr auto; gap:1rem; align-items:center; transition:all 0.2s; cursor:pointer; }
+  .need-card:hover { border-color:var(--accent); transform:translateX(2px); }
+  .need-card.critical { border-left:3px solid var(--critical); }
+  .need-card.high     { border-left:3px solid var(--high); }
+  .need-card.medium   { border-left:3px solid var(--medium); }
+  .need-card.low      { border-left:3px solid var(--low); }
+  .urgency-badge { width:36px; height:36px; border-radius:8px; display:flex; align-items:center; justify-content:center; font-family:'JetBrains Mono',monospace; font-size:0.8rem; font-weight:600; }
+  .critical .urgency-badge { background:rgba(255,71,87,0.15); color:var(--critical); }
+  .high     .urgency-badge { background:rgba(255,140,66,0.15); color:var(--high); }
+  .medium   .urgency-badge { background:rgba(255,209,102,0.15); color:var(--medium); }
+  .low      .urgency-badge { background:rgba(0,229,160,0.15); color:var(--low); }
+  .need-info h4 { font-size:0.9rem; font-weight:600; margin-bottom:0.2rem; }
+  .need-info p  { font-size:0.78rem; color:var(--muted); }
+  .need-meta { text-align:right; }
+  .need-meta .people { font-family:'JetBrains Mono',monospace; font-size:0.85rem; color:var(--accent); font-weight:600; }
+  .need-meta .category { font-size:0.7rem; color:var(--muted); margin-top:0.2rem; }
+
+  /* BADGES */
+  .need-status-badge { font-size:0.68rem; padding:0.18rem 0.55rem; border-radius:20px; font-weight:600; display:inline-block; }
+  .badge-open     { background:rgba(255,71,87,0.12);   color:var(--critical); }
+  .badge-assigned { background:rgba(255,209,102,0.12); color:var(--medium); }
+  .badge-resolved { background:rgba(0,229,160,0.12);   color:var(--accent); }
+
+  /* VOLUNTEERS */
+  .vol-item { display:flex; align-items:center; gap:0.75rem; padding:0.75rem 0; border-bottom:1px solid var(--border); }
+  .vol-item:last-child { border-bottom:none; }
+  .vol-avatar { width:38px; height:38px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-weight:700; font-size:0.85rem; flex-shrink:0; }
+  .vol-name   { font-size:0.88rem; font-weight:600; }
+  .vol-skills { font-size:0.72rem; color:var(--muted); margin-top:0.1rem; }
+  .vol-status { margin-left:auto; font-size:0.7rem; padding:0.2rem 0.6rem; border-radius:20px; font-weight:500; }
+  .status-available { background:rgba(0,229,160,0.1);   color:var(--accent); }
+  .status-assigned  { background:rgba(255,209,102,0.1); color:var(--medium); }
+  .status-busy      { background:rgba(255,71,87,0.1);   color:var(--critical); }
+
+  /* FORMS */
+  .form-grid { display:grid; grid-template-columns:1fr 1fr; gap:1.5rem; }
+  .form-group { display:flex; flex-direction:column; gap:0.5rem; }
+  .form-group.full { grid-column:1/-1; }
+  label { font-size:0.78rem; color:var(--muted); text-transform:uppercase; letter-spacing:0.06em; font-weight:500; }
+  input, select, textarea { background:var(--surface2); border:1px solid var(--border); color:var(--text); border-radius:8px; padding:0.75rem 1rem; font-family:'DM Sans',sans-serif; font-size:0.9rem; transition:border-color 0.2s; outline:none; }
+  input:focus, select:focus, textarea:focus { border-color:var(--accent); }
+  select option { background:var(--surface2); }
+  textarea { resize:vertical; min-height:100px; }
+
+  /* BUTTONS */
+  .btn-primary { background:var(--accent); color:#0a0e17; border:none; border-radius:8px; padding:0.85rem 2rem; font-family:'DM Sans',sans-serif; font-weight:600; font-size:0.9rem; cursor:pointer; transition:all 0.2s; display:inline-flex; align-items:center; gap:0.5rem; }
+  .btn-primary:hover { transform:translateY(-1px); box-shadow:0 8px 24px rgba(0,229,160,0.2); }
+  .btn-secondary { background:transparent; color:var(--accent); border:1px solid var(--accent); border-radius:8px; padding:0.6rem 1.2rem; font-family:'DM Sans',sans-serif; font-weight:500; font-size:0.82rem; cursor:pointer; transition:all 0.2s; }
+  .btn-secondary:hover { background:rgba(0,229,160,0.08); }
+
+  /* AI MATCHING */
+  .match-layout { display:grid; grid-template-columns:1fr 1fr; gap:1.5rem; }
+  .match-card { background:var(--surface); border:1px solid var(--border); border-radius:12px; padding:1.5rem; }
+  .match-result { background:var(--surface2); border:1px solid rgba(0,229,160,0.2); border-radius:10px; padding:1rem 1.25rem; margin-bottom:0.75rem; display:flex; align-items:center; gap:1rem; }
+  .match-score { font-family:'JetBrains Mono',monospace; font-size:1.1rem; font-weight:600; min-width:48px; text-align:center; }
+  .match-info p { font-size:0.75rem; color:var(--muted); }
+  .match-btn { margin-left:auto; }
+  .score-bar-wrap { margin-top:0.5rem; }
+  .score-bar-bg   { background:var(--border); border-radius:4px; height:4px; }
+  .score-bar-fill { height:4px; border-radius:4px; transition:width 1s ease; }
+
+  /* AI TAG & BOX */
+  .ai-tag { display:inline-flex; align-items:center; gap:0.3rem; font-size:0.68rem; background:rgba(0,229,160,0.06); border:1px solid rgba(0,229,160,0.15); color:var(--accent); padding:0.2rem 0.6rem; border-radius:20px; font-family:'JetBrains Mono',monospace; }
+  .ai-dot { width:5px; height:5px; border-radius:50%; background:var(--accent); animation:pulse 1.5s infinite; }
+  .ai-box { background:rgba(0,229,160,0.03); border:1px solid rgba(0,229,160,0.12); border-radius:10px; padding:1rem 1.25rem; margin-top:1rem; font-size:0.85rem; color:var(--text); line-height:1.7; }
+  .ai-box-header { display:flex; align-items:center; gap:0.5rem; margin-bottom:0.75rem; font-size:0.78rem; color:var(--accent); font-weight:600; }
+
+  /* SPINNER */
+  .spinner { width:18px; height:18px; border:2px solid rgba(0,229,160,0.2); border-top-color:var(--accent); border-radius:50%; animation:spin 0.7s linear infinite; display:none; }
+  @keyframes spin { to{transform:rotate(360deg)} }
+
+  /* TRACKER */
+  .stats-row { display:grid; grid-template-columns:repeat(4,1fr); gap:1rem; margin-bottom:1.75rem; }
+  .stat-box { background:var(--surface); border:1px solid var(--border); border-radius:10px; padding:1rem 1.25rem; text-align:center; }
+  .stat-box .val { font-family:'DM Serif Display',serif; font-size:1.8rem; }
+  .stat-box .lbl { font-size:0.72rem; color:var(--muted); text-transform:uppercase; letter-spacing:0.06em; margin-top:0.2rem; }
+  .tracker-filters { display:flex; gap:0.5rem; margin-bottom:1.5rem; flex-wrap:wrap; }
+  .filter-btn { background:var(--surface2); border:1px solid var(--border); color:var(--muted); border-radius:6px; padding:0.4rem 1rem; font-size:0.82rem; cursor:pointer; transition:all 0.2s; font-family:'DM Sans',sans-serif; }
+  .filter-btn.active { background:rgba(0,229,160,0.1); color:var(--accent); border-color:var(--accent); }
+  .tracker-card { background:var(--surface); border:1px solid var(--border); border-radius:12px; padding:1.25rem 1.5rem; margin-bottom:0.85rem; transition:border-color 0.2s; }
+  .tracker-card:hover  { border-color:rgba(0,229,160,0.3); }
+  .tracker-card.open     { border-left:3px solid var(--critical); }
+  .tracker-card.assigned { border-left:3px solid var(--medium); }
+  .tracker-card.resolved { border-left:3px solid var(--accent); opacity:0.88; }
+  .tracker-top { display:flex; align-items:flex-start; justify-content:space-between; gap:1rem; margin-bottom:0.6rem; }
+  .tracker-title { font-size:0.95rem; font-weight:600; margin-bottom:0.2rem; }
+  .tracker-meta  { font-size:0.78rem; color:var(--muted); }
+  .tracker-actions { display:flex; gap:0.5rem; flex-shrink:0; align-items:center; }
+  .progress-row { margin-top:0.75rem; }
+  .progress-label { display:flex; justify-content:space-between; font-size:0.72rem; color:var(--muted); margin-bottom:0.3rem; }
+  .progress-bg   { background:var(--border); border-radius:4px; height:5px; }
+  .progress-fill { height:5px; border-radius:4px; transition:width 0.8s ease; }
+  .timeline { margin-top:0.85rem; border-top:1px solid var(--border); padding-top:0.75rem; }
+  .timeline-item { display:flex; gap:0.6rem; align-items:flex-start; font-size:0.78rem; color:var(--muted); margin-bottom:0.4rem; }
+  .tl-dot { width:7px; height:7px; border-radius:50%; flex-shrink:0; margin-top:4px; }
+
+  /* MODAL */
+  .modal-overlay { position:fixed; inset:0; z-index:200; background:rgba(0,0,0,0.72); backdrop-filter:blur(6px); display:flex; align-items:center; justify-content:center; opacity:0; pointer-events:none; transition:opacity 0.2s; }
+  .modal-overlay.show { opacity:1; pointer-events:all; }
+  .modal { background:var(--surface); border:1px solid var(--border); border-radius:16px; padding:2rem; width:100%; max-width:480px; transform:translateY(20px); transition:transform 0.25s; box-shadow:0 24px 60px rgba(0,0,0,0.5); }
+  .modal-overlay.show .modal { transform:translateY(0); }
+  .modal h3 { font-family:'DM Serif Display',serif; font-size:1.3rem; margin-bottom:0.4rem; }
+  .modal p  { font-size:0.85rem; color:var(--muted); margin-bottom:1.25rem; }
+  .modal-actions { display:flex; gap:0.75rem; margin-top:1.5rem; }
+
+  /* TOAST */
+  .toast { position:fixed; bottom:2rem; right:2rem; z-index:999; background:var(--surface); border:1px solid var(--accent); border-radius:10px; padding:1rem 1.5rem; display:flex; align-items:center; gap:0.75rem; transform:translateY(100px); opacity:0; transition:all 0.3s; box-shadow:0 8px 32px rgba(0,0,0,0.4); max-width:420px; }
+  .toast.show { transform:translateY(0); opacity:1; }
+  .toast-text { font-size:0.85rem; line-height:1.4; }
+
+  /* EMPTY STATE */
+  .empty-state { text-align:center; padding:2.5rem 1rem; color:var(--muted); font-size:0.88rem; }
+  .empty-icon { font-size:2rem; margin-bottom:0.5rem; }
+
+  /* INFO BOX */
+  .info-box { background:rgba(0,229,160,0.05); border:1px solid rgba(0,229,160,0.15); border-radius:10px; padding:1rem; font-size:0.82rem; color:var(--muted); line-height:1.6; margin-top:1rem; }
+
+  /* FORMULA */
+  .formula-box { background:var(--surface2); border:1px solid var(--border); border-radius:10px; padding:1.25rem; font-family:'JetBrains Mono',monospace; font-size:0.8rem; line-height:2; color:var(--muted); }
+
+  /* RESPONSIVE */
+  @media(max-width:1000px) { .hero-row{grid-template-columns:repeat(3,1fr)} .dashboard-grid{grid-template-columns:1fr} .match-layout{grid-template-columns:1fr} .form-grid{grid-template-columns:1fr} .stats-bar{display:none} }
+  @media(max-width:700px)  { .hero-row{grid-template-columns:1fr 1fr} .stats-row{grid-template-columns:1fr 1fr} nav button{font-size:0.72rem;padding:0.4rem 0.6rem} }
+</style>
+</head>
+<body>
+
+<!-- HEADER -->
+<header>
+  <div class="logo"><div class="logo-dot"></div>CommunityPulse</div>
+  <nav>
+    <button class="active" onclick="showPage('dashboard',this)">Dashboard</button>
+    <button onclick="showPage('submit',this)">Submit Need</button>
+    <button onclick="showPage('volunteers',this)">Volunteers</button>
+    <button onclick="showPage('matching',this)">AI Matching</button>
+    <button onclick="showPage('tracker',this)">📋 Tracker</button>
+  </nav>
+  <div class="stats-bar">
+    <div class="stat-chip">Active: <span id="hdr-needs">0</span></div>
+    <div class="stat-chip">Volunteers: <span id="hdr-vols">0</span></div>
+    <div class="stat-chip">Matched: <span id="hdr-matched">0</span></div>
+    <div class="stat-chip">Resolved: <span id="hdr-resolved">0</span></div>
+  </div>
+</header>
+
+<main>
+
+<!-- ═══════════════ PAGE 1 — DASHBOARD ═══════════════ -->
+<div class="page active" id="page-dashboard">
+  <div class="page-header">
+    <h1>Community Overview</h1>
+    <p>Real-time snapshot of all community needs and volunteer resources</p>
+  </div>
+  <div class="hero-row">
+    <div class="kpi-card" style="--card-color:var(--critical)">
+      <div class="kpi-label">Critical Needs</div>
+      <div class="kpi-value" id="kpi-critical">0</div>
+      <div class="kpi-sub">Immediate attention required</div>
+    </div>
+    <div class="kpi-card" style="--card-color:var(--accent)">
+      <div class="kpi-label">Active Needs</div>
+      <div class="kpi-value" id="kpi-total">0</div>
+      <div class="kpi-sub">Unresolved needs</div>
+    </div>
+    <div class="kpi-card" style="--card-color:#7c6af7">
+      <div class="kpi-label">Available Volunteers</div>
+      <div class="kpi-value" id="kpi-avail">0</div>
+      <div class="kpi-sub">Ready to be assigned</div>
+    </div>
+    <div class="kpi-card" style="--card-color:var(--medium)">
+      <div class="kpi-label">People Affected</div>
+      <div class="kpi-value" id="kpi-people">0</div>
+      <div class="kpi-sub">Total beneficiaries</div>
+    </div>
+    <div class="kpi-card" style="--card-color:var(--accent)">
+      <div class="kpi-label">Resolved</div>
+      <div class="kpi-value" id="kpi-resolved">0</div>
+      <div class="kpi-sub">Successfully addressed</div>
+    </div>
+  </div>
+  <div class="dashboard-grid">
+    <div class="panel">
+      <div class="panel-title">Urgent Community Needs <span class="tag">sorted by score</span></div>
+      <div id="needs-list"></div>
+    </div>
+    <div class="panel">
+      <div class="panel-title">Volunteer Roster <span class="tag">live</span></div>
+      <div id="vol-list-dash"></div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════ PAGE 2 — SUBMIT NEED ═══════════════ -->
+<div class="page" id="page-submit">
+  <div class="page-header">
+    <h1>Report a Community Need</h1>
+    <p>Submit a need — it instantly appears on Dashboard, AI Matching &amp; Tracker</p>
+  </div>
+  <div style="display:grid;grid-template-columns:1.2fr 1fr;gap:1.5rem">
+    <div class="panel">
+      <div class="panel-title">Need Details</div>
+      <div class="form-grid">
+        <div class="form-group">
+          <label>Need Title *</label>
+          <input id="f-title" type="text" placeholder="e.g. Food shortage in Sector 4">
+        </div>
+        <div class="form-group">
+          <label>Location / Area *</label>
+          <input id="f-location" type="text" placeholder="e.g. North Ward, Block B">
+        </div>
+        <div class="form-group">
+          <label>Category</label>
+          <select id="f-category">
+            <option value="Medical">Medical</option>
+            <option value="Food">Food &amp; Nutrition</option>
+            <option value="Education">Education</option>
+            <option value="Shelter">Shelter</option>
+            <option value="Transport">Transport</option>
+            <option value="Mental Health">Mental Health</option>
+            <option value="Elderly Care">Elderly Care</option>
+            <option value="Other">Other</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>People Affected</label>
+          <input id="f-people" type="number" placeholder="e.g. 45" min="1">
+        </div>
+        <div class="form-group">
+          <label>Urgency Level</label>
+          <select id="f-urgency">
+            <option value="4">Critical — Life threatening</option>
+            <option value="3">High — Urgent intervention</option>
+            <option value="2">Medium — Within a week</option>
+            <option value="1">Low — Non-urgent</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Days Unaddressed</label>
+          <input id="f-days" type="number" placeholder="e.g. 3" min="0">
+        </div>
+        <div class="form-group full">
+          <label>Description</label>
+          <textarea id="f-desc" placeholder="Describe the situation in detail..."></textarea>
+        </div>
+      </div>
+      <div style="margin-top:1.5rem;display:flex;align-items:center;gap:1rem;flex-wrap:wrap">
+        <button class="btn-primary" onclick="submitNeed()">＋ Submit Need</button>
+        <div class="spinner" id="submit-spinner"></div>
+        <span class="ai-tag"><div class="ai-dot"></div>AI scores &amp; analyses</span>
+      </div>
+      <div id="ai-analysis" class="ai-box" style="display:none"></div>
+    </div>
+    <div class="panel">
+      <div class="panel-title">How Scoring Works <span class="tag">formula</span></div>
+      <p style="font-size:0.85rem;color:var(--muted);line-height:1.7;margin-bottom:0.75rem">Every need gets a priority score automatically. Higher score = appears higher on dashboard.</p>
+      <div class="formula-box">
+        <div style="color:var(--accent)">Score =</div>
+        <div style="padding-left:1rem;color:var(--medium)">(urgency × weight)</div>
+        <div style="padding-left:1rem">+ <span style="color:var(--medium)">(people × 0.5)</span></div>
+        <div style="padding-left:1rem">+ <span style="color:var(--medium)">(days × 5)</span></div>
+      </div>
+      <div style="margin-top:1.25rem;display:flex;flex-direction:column;gap:0.5rem">
+        <div style="display:flex;gap:0.75rem;font-size:0.82rem;align-items:center"><span style="color:var(--critical);font-weight:700;min-width:65px">Critical</span><span style="color:var(--muted)">weight ×30</span></div>
+        <div style="display:flex;gap:0.75rem;font-size:0.82rem;align-items:center"><span style="color:var(--high);font-weight:700;min-width:65px">High</span><span style="color:var(--muted)">weight ×20</span></div>
+        <div style="display:flex;gap:0.75rem;font-size:0.82rem;align-items:center"><span style="color:var(--medium);font-weight:700;min-width:65px">Medium</span><span style="color:var(--muted)">weight ×10</span></div>
+        <div style="display:flex;gap:0.75rem;font-size:0.82rem;align-items:center"><span style="color:var(--low);font-weight:700;min-width:65px">Low</span><span style="color:var(--muted)">weight ×5</span></div>
+      </div>
+      <div class="info-box">
+        ✅ Once submitted, your need instantly appears on:<br>
+        <strong style="color:var(--text)">Dashboard</strong> · <strong style="color:var(--text)">AI Matching</strong> · <strong style="color:var(--text)">Tracker</strong>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════ PAGE 3 — VOLUNTEERS ═══════════════ -->
+<div class="page" id="page-volunteers">
+  <div class="page-header">
+    <h1>Volunteer Management</h1>
+    <p>Register volunteers — they appear instantly on Dashboard &amp; AI Matching</p>
+  </div>
+  <div style="display:grid;grid-template-columns:1fr 1.5fr;gap:1.5rem">
+    <div class="panel">
+      <div class="panel-title">Register Volunteer</div>
+      <div style="display:flex;flex-direction:column;gap:1rem">
+        <div class="form-group">
+          <label>Full Name *</label>
+          <input id="v-name" type="text" placeholder="e.g. Priya Sharma">
+        </div>
+        <div class="form-group">
+          <label>Skills (comma-separated) *</label>
+          <input id="v-skills" type="text" placeholder="e.g. Medical, Transport">
+        </div>
+        <div class="form-group">
+          <label>Location / Zone</label>
+          <input id="v-location" type="text" placeholder="e.g. South Ward">
+        </div>
+        <div class="form-group">
+          <label>Availability</label>
+          <select id="v-avail">
+            <option value="available">Available Now</option>
+            <option value="weekends">Weekends Only</option>
+            <option value="mornings">Mornings Only</option>
+          </select>
+        </div>
+        <button class="btn-primary" onclick="addVolunteer()">＋ Register Volunteer</button>
+        <div class="info-box">
+          ✅ Once registered, appears instantly on:<br>
+          <strong style="color:var(--text)">Dashboard</strong> · <strong style="color:var(--text)">AI Matching</strong>
+        </div>
+      </div>
+    </div>
+    <div class="panel">
+      <div class="panel-title">All Volunteers <span class="tag" id="vol-count-tag">0 total</span></div>
+      <div id="vol-list-full"></div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════ PAGE 4 — AI MATCHING ═══════════════ -->
+<div class="page" id="page-matching">
+  <div class="page-header">
+    <h1>AI-Powered Volunteer Matching</h1>
+    <p>All submitted needs appear here — click any need to find the best volunteer</p>
+  </div>
+  <div class="match-layout">
+    <div class="match-card">
+      <div class="panel-title">Community Needs <span class="tag">click to match</span></div>
+      <div id="match-needs-list"></div>
+    </div>
+    <div class="match-card">
+      <div class="panel-title">Best Volunteer Matches <span class="ai-tag"><div class="ai-dot"></div>AI ranked</span></div>
+      <div id="match-results">
+        <div class="empty-state"><div class="empty-icon">👈</div>Select a need on the left to see AI-ranked volunteer matches</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════ PAGE 5 — TRACKER ═══════════════ -->
+<div class="page" id="page-tracker">
+  <div class="page-header">
+    <h1>Resolution Tracker</h1>
+    <p>Every submitted need tracked: Open → In Progress → Resolved</p>
+  </div>
+  <div class="stats-row">
+    <div class="stat-box"><div class="val" id="tr-open" style="color:var(--critical)">0</div><div class="lbl">Open</div></div>
+    <div class="stat-box"><div class="val" id="tr-assigned" style="color:var(--medium)">0</div><div class="lbl">In Progress</div></div>
+    <div class="stat-box"><div class="val" id="tr-resolved" style="color:var(--accent)">0</div><div class="lbl">Resolved</div></div>
+    <div class="stat-box"><div class="val" id="tr-rate" style="color:var(--accent)">0%</div><div class="lbl">Resolution Rate</div></div>
+  </div>
+  <div class="tracker-filters">
+    <button class="filter-btn active" onclick="setFilter('all',this)">All Needs</button>
+    <button class="filter-btn" onclick="setFilter('open',this)">🔴 Open</button>
+    <button class="filter-btn" onclick="setFilter('assigned',this)">🟡 In Progress</button>
+    <button class="filter-btn" onclick="setFilter('resolved',this)">✅ Resolved</button>
+  </div>
+  <div id="tracker-list"></div>
+</div>
+
+</main>
+
+<!-- RESOLVE MODAL -->
+<div class="modal-overlay" id="resolve-modal">
+  <div class="modal">
+    <h3>Mark as Resolved ✅</h3>
+    <p>Confirm this need has been fully addressed by the assigned volunteer.</p>
+    <div class="form-group">
+      <label>Resolution Note (optional)</label>
+      <textarea id="resolve-note" placeholder="e.g. Medicine delivered to 60 patients. Follow-up in 2 weeks." style="min-height:80px"></textarea>
+    </div>
+    <div class="modal-actions">
+      <button class="btn-primary" onclick="confirmResolve()">✅ Confirm Resolved</button>
+      <button class="btn-secondary" onclick="closeModal()">Cancel</button>
+    </div>
+  </div>
+</div>
+
+<!-- TOAST -->
+<div class="toast" id="toast"><span id="toast-text"></span></div>
+
+<script>
+// ════════════════════════════ STATE ══════════════════════════════════════════
+const state = {
+  needs: [
+    { id:1, title:"Urgent medicine shortage",  location:"North Ward",  category:"Medical",      people:60,  urgency:4, days:5,  desc:"Diabetic patients running out of insulin",       score:0, assigned:null, status:'open', resolvedAt:null, resolvedNote:'', timeline:['Reported 5 days ago'] },
+    { id:2, title:"Food ration not received",   location:"East Block B",category:"Food",         people:120, urgency:3, days:8,  desc:"Monthly ration delayed for 3 weeks",             score:0, assigned:null, status:'open', resolvedAt:null, resolvedNote:'', timeline:['Reported 8 days ago'] },
+    { id:3, title:"School dropout support",     location:"South Zone",  category:"Education",    people:30,  urgency:2, days:14, desc:"Children unable to attend school",               score:0, assigned:null, status:'open', resolvedAt:null, resolvedNote:'', timeline:['Reported 14 days ago'] },
+    { id:4, title:"Elderly isolation",          location:"West Colony", category:"Elderly Care", people:15,  urgency:2, days:20, desc:"Senior citizens with no family support",         score:0, assigned:null, status:'open', resolvedAt:null, resolvedNote:'', timeline:['Reported 20 days ago'] },
+    { id:5, title:"Emergency shelter needed",   location:"Flood Zone",  category:"Shelter",      people:80,  urgency:4, days:2,  desc:"Families displaced by flooding",                 score:0, assigned:null, status:'open', resolvedAt:null, resolvedNote:'', timeline:['Reported 2 days ago'] },
+  ],
+  volunteers: [
+    { id:1, name:"Priya Sharma", skills:["Medical","Elderly Care"],   location:"North Ward", avail:"available", status:"available" },
+    { id:2, name:"Arjun Mehta",  skills:["Transport","Food"],          location:"East Block", avail:"available", status:"available" },
+    { id:3, name:"Sara Qureshi", skills:["Education","Mental Health"], location:"South Zone", avail:"weekends",  status:"available" },
+    { id:4, name:"Dev Nair",     skills:["Shelter","Transport"],       location:"Flood Zone", avail:"available", status:"available" },
+    { id:5, name:"Meena Rao",    skills:["Food","Elderly Care"],       location:"West Colony",avail:"mornings",  status:"available" },
+  ],
+  nextNeedId: 6, nextVolId: 6, matched: 0,
+  trackerFilter: 'all', resolvingNeedId: null,
+};
+
+const UW = {4:30,3:20,2:10,1:5};
+const UL = {4:'critical',3:'high',2:'medium',1:'low'};
+const UN = {4:'Critical',3:'High',2:'Medium',1:'Low'};
+const VC = ['#7c6af7','#ff8c42','#00b4d8','#06d6a0','#e63946','#f72585','#4cc9f0'];
+
+const $  = id => document.getElementById(id);
+const $$ = (id,v) => { const e=$(id); if(e) e.textContent=v; };
+
+function calcScore(n) { return (n.urgency * UW[n.urgency]) + (n.people * 0.5) + (n.days * 5); }
+
+function init() {
+  state.needs.forEach(n => n.score = Math.round(calcScore(n)));
+  render();
+}
+
+// ═══════════════════════════ MASTER RENDER ═══════════════════════════════════
+// Runs on EVERY state change. Updates all sections safely with null checks.
+function render() {
+  const sorted      = [...state.needs].sort((a,b) => b.score - a.score);
+  const active      = sorted.filter(n => n.status !== 'resolved');
+  const avail       = state.volunteers.filter(v => v.status === 'available').length;
+  const people      = active.reduce((s,n) => s+n.people, 0);
+  const resolvedCnt = state.needs.filter(n => n.status === 'resolved').length;
+
+  // Header stats
+  $$('hdr-needs', active.length); $$('hdr-vols', state.volunteers.length);
+  $$('hdr-matched', state.matched); $$('hdr-resolved', resolvedCnt);
+
+  // Dashboard KPIs
+  $$('kpi-critical', state.needs.filter(n=>n.urgency===4&&n.status!=='resolved').length);
+  $$('kpi-total', active.length); $$('kpi-avail', avail);
+  $$('kpi-people', people); $$('kpi-resolved', resolvedCnt);
+
+  // ── Dashboard: needs list ─────────────────────────────────────────────────
+  const nl = $('needs-list');
+  if (nl) nl.innerHTML = active.length === 0
+    ? empty('📋','No active needs yet. Use "Submit Need" to add one.')
+    : active.slice(0,6).map(n => needCard(n)).join('');
+
+  // ── Dashboard: volunteer roster ───────────────────────────────────────────
+  const vl = $('vol-list-dash');
+  if (vl) vl.innerHTML = state.volunteers.length === 0
+    ? empty('🙋','No volunteers yet. Register one in "Volunteers".')
+    : state.volunteers.map((v,i) => volRow(v,i,false)).join('');
+
+  // ── Volunteers page: full list ────────────────────────────────────────────
+  const vf = $('vol-list-full');
+  if (vf) {
+    vf.innerHTML = state.volunteers.length === 0
+      ? empty('🙋','No volunteers yet. Register one on the left.')
+      : state.volunteers.map((v,i) => volRow(v,i,true)).join('');
+    $$('vol-count-tag', `${state.volunteers.length} total`);
+  }
+
+  // ── AI Matching: needs list ───────────────────────────────────────────────
+  const mn = $('match-needs-list');
+  if (mn) mn.innerHTML = active.length === 0
+    ? empty('📋','No active needs yet. Submit a need first.')
+    : active.map(n => `
+        <div class="need-card ${UL[n.urgency]}" onclick="matchNeed(${n.id})" style="margin-bottom:0.6rem">
+          <div class="urgency-badge">${n.score}</div>
+          <div class="need-info"><h4>${n.title}</h4><p>${n.category} · ${n.people} people · ${n.location}</p></div>
+          <div style="text-align:right"><span class="need-status-badge badge-${n.status}">${n.status==='open'?'Open':'In Progress'}</span></div>
+        </div>`).join('');
+
+  // ── Tracker ───────────────────────────────────────────────────────────────
+  renderTracker();
+}
+
+function needCard(n) {
+  const vol = n.assigned ? (state.volunteers.find(v=>v.id===n.assigned)||{name:'—'}) : null;
+  return `
+    <div class="need-card ${UL[n.urgency]}">
+      <div class="urgency-badge">${n.score}</div>
+      <div class="need-info">
+        <h4>${n.title}</h4>
+        <p>📍 ${n.location} · ${n.category} · ${n.days}d ago${vol?' · 👤 '+vol.name:''}</p>
+      </div>
+      <div class="need-meta">
+        <div class="people">${n.people}</div>
+        <div class="category">people</div>
+        <div style="margin-top:0.3rem"><span class="need-status-badge badge-${n.status}">${n.status==='open'?'Open':'In Progress'}</span></div>
+        ${n.status==='assigned'?`<div style="margin-top:0.4rem"><button class="btn-secondary" style="font-size:0.7rem;padding:0.25rem 0.6rem" onclick="openResolveModal(${n.id})">Mark Resolved</button></div>`:''}
+      </div>
+    </div>`;
+}
+
+function volRow(v, i, showAvail) {
+  return `
+    <div class="vol-item">
+      <div class="vol-avatar" style="background:${VC[i%VC.length]}22;color:${VC[i%VC.length]}">${v.name.split(' ').map(x=>x[0]).join('')}</div>
+      <div>
+        <div class="vol-name">${v.name}</div>
+        <div class="vol-skills">${v.skills.join(' · ')} · ${v.location}${showAvail?' · '+v.avail:''}</div>
+      </div>
+      <span class="vol-status status-${v.status}">${v.status.charAt(0).toUpperCase()+v.status.slice(1)}</span>
+    </div>`;
+}
+
+function empty(icon, msg) {
+  return `<div class="empty-state"><div class="empty-icon">${icon}</div>${msg}</div>`;
+}
+
+// ═══════════════════════════ TRACKER ═════════════════════════════════════════
+function setFilter(f, btn) {
+  state.trackerFilter = f;
+  document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  renderTracker();
+}
+
+function renderTracker() {
+  const trEl = $('tr-open'), tlEl = $('tracker-list');
+  if (!trEl || !tlEl) return; // not mounted yet
+
+  const oc = state.needs.filter(n=>n.status==='open').length;
+  const ac = state.needs.filter(n=>n.status==='assigned').length;
+  const rc = state.needs.filter(n=>n.status==='resolved').length;
+  const tot = state.needs.length;
+
+  $$('tr-open', oc); $$('tr-assigned', ac); $$('tr-resolved', rc);
+  $$('tr-rate', tot ? Math.round((rc/tot)*100)+'%' : '0%');
+
+  let list = [...state.needs];
+  if (state.trackerFilter !== 'all') list = list.filter(n=>n.status===state.trackerFilter);
+  list.sort((a,b)=>b.score-a.score);
+
+  if (list.length === 0) { tlEl.innerHTML = empty('✅','No needs in this category yet.'); return; }
+
+  tlEl.innerHTML = list.map(n => {
+    const vol = n.assigned ? state.volunteers.find(v=>v.id===n.assigned) : null;
+    const sc  = n.status==='resolved'?'var(--accent)':n.status==='assigned'?'var(--medium)':'var(--critical)';
+    const pct = n.status==='resolved'?100:n.status==='assigned'?55:15;
+    const lbl = n.status==='open'?'Open':n.status==='assigned'?'In Progress':'✅ Resolved';
+    return `
+    <div class="tracker-card ${n.status}">
+      <div class="tracker-top">
+        <div>
+          <div class="tracker-title">${n.title} <span class="need-status-badge badge-${n.status}" style="margin-left:0.4rem">${lbl}</span></div>
+          <div class="tracker-meta">📍 ${n.location} · ${n.category} · ${n.people} people · Score: ${n.score}</div>
+        </div>
+        <div class="tracker-actions">
+          ${n.status==='assigned'?`<button class="btn-primary" style="font-size:0.78rem;padding:0.5rem 0.9rem" onclick="openResolveModal(${n.id})">✅ Mark Resolved</button>`:n.status==='open'?`<span style="font-size:0.78rem;color:var(--critical)">⚠️ Awaiting volunteer</span>`:`<span style="font-size:0.78rem;color:var(--accent)">🎉 Fully addressed</span>`}
+        </div>
+      </div>
+      <div class="progress-row">
+        <div class="progress-label"><span>Resolution Progress</span><span style="color:${sc}">${pct}%</span></div>
+        <div class="progress-bg"><div class="progress-fill" style="width:${pct}%;background:${sc}"></div></div>
+      </div>
+      <div class="timeline">
+        ${n.timeline.map(t=>`<div class="timeline-item"><div class="tl-dot" style="background:${sc}"></div><span>${t}</span></div>`).join('')}
+        ${n.status==='resolved'&&n.resolvedNote?`<div class="timeline-item"><div class="tl-dot" style="background:var(--accent)"></div><span style="color:var(--text)">${n.resolvedNote}</span></div>`:''}
+      </div>
+      ${vol?`<div style="margin-top:0.6rem;font-size:0.78rem;color:var(--muted)">👤 Volunteer: <strong style="color:var(--text)">${vol.name}</strong> · ${vol.skills.join(', ')}</div>`:''}
+    </div>`;
+  }).join('');
+}
+
+// ═══════════════════════════ RESOLVE MODAL ════════════════════════════════════
+function openResolveModal(needId) {
+  state.resolvingNeedId = needId;
+  $('resolve-note').value = '';
+  $('resolve-modal').classList.add('show');
+}
+function closeModal() {
+  $('resolve-modal').classList.remove('show');
+  state.resolvingNeedId = null;
+}
+function confirmResolve() {
+  const need = state.needs.find(n=>n.id===state.resolvingNeedId);
+  if (!need) return;
+  const note = $('resolve-note').value.trim();
+  const vol  = need.assigned ? state.volunteers.find(v=>v.id===need.assigned) : null;
+  need.status = 'resolved';
+  need.resolvedAt = new Date().toLocaleDateString();
+  need.resolvedNote = note || 'Issue successfully resolved.';
+  need.timeline.push(`Volunteer ${vol?vol.name:'assigned'} completed the task`);
+  need.timeline.push(`✅ Marked resolved on ${need.resolvedAt}`);
+  if (vol) vol.status = 'available'; // free the volunteer
+  closeModal();
+  render();
+  showToast(`✅ "${need.title}" resolved! Volunteer freed up.`);
+}
+
+// ═══════════════════════════ SUBMIT NEED ══════════════════════════════════════
+async function submitNeed() {
+  const title    = $('f-title').value.trim();
+  const location = $('f-location').value.trim();
+  const category = $('f-category').value;
+  const people   = parseInt($('f-people').value) || 1;
+  const urgency  = parseInt($('f-urgency').value);
+  const days     = parseInt($('f-days').value) || 0;
+  const desc     = $('f-desc').value.trim();
+
+  if (!title || !location) { showToast('⚠️ Please fill in Title and Location'); return; }
+
+  const need = {
+    id: state.nextNeedId++, title, location, category, people, urgency, days, desc,
+    assigned:null, status:'open', resolvedAt:null, resolvedNote:'',
+    timeline:[`Reported on ${new Date().toLocaleDateString()}`], score:0
+  };
+  need.score = Math.round(calcScore(need));
+  state.needs.push(need);
+  render(); // immediate update — appears everywhere NOW
+
+  const spinner = $('submit-spinner');
+  const aiBox   = $('ai-analysis');
+  spinner.style.display = 'block';
+  aiBox.style.display   = 'none';
+
+  try {
+    const txt = await callClaude(`You are an NGO coordinator AI. Analyze this community need and give a 3-sentence assessment covering: urgency context, recommended action, and ideal volunteer profile.
+
+Need: "${title}"
+Category: ${category}, People: ${people}, Location: ${location}
+Description: ${desc||'Not provided'}, Urgency: ${UN[urgency]}, Days unaddressed: ${days}, Priority score: ${need.score}
+
+Be concise, practical, and compassionate.`);
+    aiBox.innerHTML = `<div class="ai-box-header">🤖 AI Assessment</div>${txt}`;
+  } catch(e) {
+    aiBox.innerHTML = `<div class="ai-box-header">📊 Scored</div>Priority score: <strong>${need.score}</strong> — ${UN[urgency]} urgency, ${people} people affected.`;
+  }
+
+  spinner.style.display = 'none';
+  aiBox.style.display   = 'block';
+  showToast(`✅ Need submitted (score: ${need.score}) — visible on Dashboard, AI Matching & Tracker!`);
+  ['f-title','f-location','f-people','f-days','f-desc'].forEach(id=>{const e=$(id);if(e)e.value='';});
+}
+
+// ═══════════════════════════ ADD VOLUNTEER ════════════════════════════════════
+function addVolunteer() {
+  const name     = $('v-name').value.trim();
+  const skills   = $('v-skills').value.split(',').map(s=>s.trim()).filter(Boolean);
+  const location = $('v-location').value.trim() || 'Not specified';
+  const avail    = $('v-avail').value;
+
+  if (!name || skills.length === 0) { showToast('⚠️ Please enter a name and at least one skill'); return; }
+
+  state.volunteers.push({ id:state.nextVolId++, name, skills, location, avail, status:'available' });
+  render(); // immediate update — appears everywhere NOW
+  showToast(`✅ ${name} registered — visible on Dashboard & AI Matching!`);
+  ['v-name','v-skills','v-location'].forEach(id=>{const e=$(id);if(e)e.value='';});
+}
+
+// ═══════════════════════════ AI MATCHING ══════════════════════════════════════
+async function matchNeed(needId) {
+  const need = state.needs.find(n=>n.id===needId);
+  if (!need) return;
+  const available = state.volunteers.filter(v=>v.status==='available');
+  const mr = $('match-results');
+
+  if (available.length === 0) {
+    mr.innerHTML = empty('🙋','No available volunteers. Register some first.');
+    return;
+  }
+
+  mr.innerHTML = `<p style="color:var(--muted);font-size:0.85rem;margin-bottom:1rem">🔍 Matching: <strong style="color:var(--text)">${need.title}</strong></p><div style="display:flex;align-items:center;gap:0.5rem;color:var(--muted);font-size:0.82rem"><div class="spinner" style="display:block"></div> AI ranking volunteers…</div>`;
+
+  const scored = available.map(v => {
+    let s = 50;
+    if (v.skills.some(sk=>sk.toLowerCase()===need.category.toLowerCase())) s+=30;
+    if (v.location.toLowerCase().includes(need.location.toLowerCase().split(' ')[0])) s+=15;
+    if (v.avail==='available') s+=5;
+    return {...v, matchScore:Math.min(s,99)};
+  }).sort((a,b)=>b.matchScore-a.matchScore);
+
+  let aiExplain = '';
+  try {
+    aiExplain = await callClaude(`In 2 sentences, explain why ${scored[0].name} (skills: ${scored[0].skills.join(', ')}, location: ${scored[0].location}) is the best match for "${need.title}" (category: ${need.category}, location: ${need.location}, ${need.people} people). Be direct and practical.`);
+  } catch(e) {
+    aiExplain = `${scored[0].name} has the closest skill match and is in a nearby area.`;
+  }
+
+  const mc = ['#00e5a0','#7c6af7','#ff8c42'];
+  mr.innerHTML = `
+    ${scored.slice(0,3).map((v,i)=>`
+      <div class="match-result">
+        <div class="match-score" style="color:${mc[i]}">${v.matchScore}%</div>
+        <div style="flex:1">
+          <div style="display:flex;align-items:center;gap:0.5rem;margin-bottom:0.25rem">
+            <div style="background:${mc[i]}22;color:${mc[i]};width:26px;height:26px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:0.68rem;font-weight:700;flex-shrink:0">${v.name.split(' ').map(x=>x[0]).join('')}</div>
+            <strong style="font-size:0.88rem">${v.name}</strong>
+          </div>
+          <div><p style="font-size:0.75rem;color:var(--muted)">${v.skills.join(' · ')} · ${v.location}</p></div>
+          <div class="score-bar-wrap"><div class="score-bar-bg"><div class="score-bar-fill" style="width:${v.matchScore}%;background:${mc[i]}"></div></div></div>
+        </div>
+        <button class="btn-secondary match-btn" onclick="assignVolunteer(${v.id},${need.id})">Assign</button>
+      </div>`).join('')}
+    <div class="ai-box"><div class="ai-box-header">🤖 AI Recommendation</div>${aiExplain}</div>`;
+}
+
+function assignVolunteer(volId, needId) {
+  const vol  = state.volunteers.find(v=>v.id===volId);
+  const need = state.needs.find(n=>n.id===needId);
+  if (!vol||!need) return;
+  vol.status    = 'assigned';
+  need.assigned = volId;
+  need.status   = 'assigned';
+  need.timeline = need.timeline||[];
+  need.timeline.push(`Volunteer ${vol.name} assigned on ${new Date().toLocaleDateString()}`);
+  state.matched++;
+  render();
+  showToast(`✅ ${vol.name} assigned to "${need.title}"!`);
+  $('match-results').innerHTML = `
+    <div style="text-align:center;padding:2.5rem 1rem">
+      <div style="font-size:2.5rem;margin-bottom:0.75rem">🎉</div>
+      <div style="font-weight:600;font-size:1rem;margin-bottom:0.4rem">${vol.name} assigned!</div>
+      <div style="color:var(--muted);font-size:0.85rem;margin-bottom:0.75rem">Matched to "${need.title}"</div>
+      <div style="font-size:0.82rem;color:var(--accent)">📋 Tracker updated — now "In Progress" (55%)</div>
+    </div>`;
+}
+
+// ═══════════════════════════ CLAUDE API ═══════════════════════════════════════
+async function callClaude(prompt) {
+  const res = await fetch('https://api.anthropic.com/v1/messages',{
+    method:'POST', headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({ model:'claude-sonnet-4-20250514', max_tokens:1000, messages:[{role:'user',content:prompt}] })
+  });
+  const data = await res.json();
+  return data.content.map(c=>c.text||'').join('');
+}
+
+// ═══════════════════════════ UI HELPERS ═══════════════════════════════════════
+function showPage(name, btn) {
+  document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
+  document.querySelectorAll('nav button').forEach(b=>b.classList.remove('active'));
+  $('page-'+name).classList.add('active');
+  btn.classList.add('active');
+  render();
+}
+
+function showToast(msg) {
+  const t=$('toast'); $('toast-text').textContent=msg;
+  t.classList.add('show');
+  setTimeout(()=>t.classList.remove('show'), 3500);
+}
+
+init();
+</script>
+</body>
+</html>
